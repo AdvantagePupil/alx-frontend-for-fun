@@ -1,4 +1,14 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
+"""
+markdown2html.py - A script to convert Markdown to HTML.
+
+This script takes two arguments: a Markdown file and an output HTML file.
+It converts headings, lists, paragraphs, bold, emphasis, and custom syntax 
+for MD5 hashing and character removal.
+
+Usage:
+    ./markdown2html.py README.md README.html
+"""
 import sys
 import os
 import re
@@ -21,7 +31,11 @@ def remove_c_from_text(text):
     return text.replace('c', '').replace('C', '')
 
 def process_markdown_line(line):
-    """ Parse a markdown line and return the corresponding HTML """
+    """
+    Parse a markdown line and return the corresponding HTML.
+    Supports headings, unordered lists, ordered lists, bold, emphasis,
+    MD5 hashing, and 'c'/'C' removal.
+    """
     # Heading conversion
     heading_match = re.match(r'^(#{1,6}) (.*)', line)
     if heading_match:
@@ -55,7 +69,7 @@ def process_markdown_line(line):
     return line
 
 def main():
-    """ Main function """
+    """ Main function to handle argument parsing and file conversion. """
     # Check argument count
     if len(sys.argv) < 3:
         usage()
