@@ -1,62 +1,119 @@
-#!/usr/bin/python3
-"""
-This is a script to convert a Markdown file to HTML.
-
-Usage:
-    ./markdown2html.py [input_file] [output_file]
-
-Arguments:
-    input_file: the name of the Markdown file to be converted
-    output_file: the name of the output HTML file
-
-Example:
-    ./markdown2html.py README.md README.html
-"""
-
-import argparse
-import pathlib
+#!/usr/bin/env python3
+import sys
+import os
 import re
+import hashlib
 
+def usage():
+    """ Print usage """
+    print("Usage: ./markdown2html.py README.md README.html", file=sys.stderr)
 
-def convert_md_to_html(input_file, output_file):
-    '''
-    Converts markdown file to HTML file
-    '''
-    # Read the contents of the input file
-    with open(input_file, encoding='utf-8') as f:
-        md_content = f.readlines()
+def file_missing(filename):
+    """ Print missing file message """
+    print(f"Missing {filename}", file=sys.stderr)
 
-    html_content = []
-    for line in md_content:
-        # Check if the line is a heading
-        match = re.match(r'(#){1,6} (.*)', line)
-        if match:
-            # Get the level of the heading
-            h_level = len(match.group(1))
-            # Get the content of the heading
-            h_content = match.group(2)
-            # Append the HTML equivalent of the heading
-            html_content.append(f'<h{h_level}>{h_content}</h{h_level}>\n')
-        else:
-            html_content.append(line)
+def convert_to_md5(text):
+    """ Convert text inside [[ ]] to its MD5 hash """
+    return hashlib.md5(text.encode()).hexdigest()
 
-    # Write the HTML content to the output file
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.writelines(html_content)
+def remove_c_from_text(text):
+    """ Remove 'c' or 'C' from the text inside (( )) """
+    return text.replace('c', '').replace('C', '')
 
+def process_markdown_line(line):
+    """ Parse a markdown line and return the corresponding HTML """
+    # Heading conversion
+    heading_match = re.match(r'^(#{1,6}) (.*)', line)
+    if heading_match:
+        heading_level = len(heading_match.group(1))
+        content = heading_match.group(2)
+        return f"<h{heading_level}>{content}</h{heading_level}>"
 
-if __name__ == '__main__':
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='Convert markdown to HTML')
-    parser.add_argument('input_file', help='path to input markdown file')
-    parser.add_argument('output_file', help='path to output HTML file')
-    args = parser.parse_args()
+    # Unordered list
+    if re.match(r'^- (.*)', line):
+        return f"<li>{line[2:]}</li>", 'ul'
+    
+    # Ordered list
+    if re.match(r'^\* (.*)', line):
+        return f"<li>{line[2:]}</li>", 'ol'
+    
+    # Bold text
+    line = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', line)
+    
+    # Emphasis text
+    line = re.sub(r'__(.*?)__', r'<em>\1</em>', line)
 
-    # Check if the input file exists
-    input_path = pathlib.Path(args.input_file)
-    if not input_path.is_file():
-        print(f'Missing {input_path}', file=sys.stderr)
+    # Custom MD5 conversion
+    line = re.sub(r'\[\[(.*?)\]\]', lambda m: convert_to_md5(m.group(1)), line)
+
+    # Remove 'c' or 'C'
+    line = re.sub(r'\(\((.*?)\)\)', lambda m: remove_c_from_text(m.group(1)), line)
+
+    # Paragraph and line break
+    if not line.strip():
+        return "", "newline"
+    return line
+
+def main():
+    """ Main function """
+    # Check argument count
+    if len(sys.argv) < 3:
+        usage()
         sys.exit(1)
 
-    # Convert the markdown file to HTML
-    convert_md_to_html(args.input_file, args.output_file)
+    markdown_file = sys.argv[1]
+    html_file = sys.argv[2]
+
+    # Check if the markdown file exists
+    if not os.path.isfile(markdown_file):
+        file_missing(markdown_file)
+        sys.exit(1)
+
+    # Read the markdown file
+    with open(markdown_file, 'r') as md:
+        lines = md.readlines()
+
+    html_lines = []
+    list_type = None
+
+    for line in lines:
+        line = line.rstrip()
+
+        html_line, tag_type = process_markdown_line(line)
+        
+        if tag_type == "ul":
+            if list_type != "ul":
+                if list_type:
+                    html_lines.append(f"</{list_type}>")
+                html_lines.append("<ul>")
+            list_type = "ul"
+        
+        elif tag_type == "ol":
+            if list_type != "ol":
+                if list_type:
+                    html_lines.append(f"</{list_type}>")
+                html_lines.append("<ol>")
+            list_type = "ol"
+        
+        elif tag_type == "newline":
+            if list_type:
+                html_lines.append(f"</{list_type}>")
+                list_type = None
+            html_lines.append("<p>")
+        else:
+            if list_type:
+                html_lines.append(f"</{list_type}>")
+                list_type = None
+            html_lines.append(html_line)
+
+    if list_type:
+        html_lines.append(f"</{list_type}>")
+
+    # Write to the HTML file
+    with open(html_file, 'w') as html:
+        html.write('\n'.join(html_lines))
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()
